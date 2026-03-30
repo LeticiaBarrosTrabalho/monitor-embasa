@@ -1,4 +1,4 @@
-from flask import Flask, redirect
+from flask import Flask, request, redirect
 import pandas as pd
 import threading
 import os
@@ -9,7 +9,7 @@ from monitor import monitor
 app = Flask(__name__)
 
 # -------------------------
-# DASHBOARD
+# DASHBOARD COM FILTROS
 # -------------------------
 @app.route("/")
 def dashboard():
@@ -17,6 +17,21 @@ def dashboard():
         return "Sem dados ainda"
 
     df = pd.read_csv("historico.csv")
+
+    # -------------------------
+    # PEGAR FILTROS DA URL
+    # -------------------------
+    tipo = request.args.get("tipo", "")
+    busca = request.args.get("busca", "")
+
+    # -------------------------
+    # APLICAR FILTROS
+    # -------------------------
+    if tipo:
+        df = df[df["objeto"].str.contains(tipo, case=False, na=False)]
+
+    if busca:
+        df = df[df["objeto"].str.contains(busca, case=False, na=False)]
 
     html = """
     <html>
@@ -28,19 +43,39 @@ def dashboard():
             th, td { padding:10px; border:1px solid #334155; }
             th { background:#1e293b; }
             tr:hover { background:#334155; }
+            input, select {
+                padding:10px;
+                margin:5px;
+                border-radius:6px;
+                border:none;
+            }
             button { 
                 background:#22c55e; 
-                padding:12px; 
+                padding:10px; 
                 border:none; 
                 color:white; 
                 border-radius:8px; 
                 cursor:pointer; 
-                margin:15px;
             }
         </style>
     </head>
     <body>
         <h1>📊 Dashboard de Licitações</h1>
+
+        <form method="get">
+            <select name="tipo">
+                <option value="">Todos</option>
+                <option value="licitação">Licitação</option>
+                <option value="pregão">Pregão</option>
+                <option value="edital">Edital</option>
+            </select>
+
+            <input type="text" name="busca" placeholder="Buscar no objeto...">
+
+            <button type="submit">Filtrar</button>
+        </form>
+
+        <br>
 
         <form action="/teste">
             <button>🚀 Testar Notificação</button>
@@ -54,7 +89,7 @@ def dashboard():
     return html
 
 # -------------------------
-# BOTÃO DE TESTE
+# BOTÃO TESTE
 # -------------------------
 @app.route("/teste")
 def teste():
@@ -63,7 +98,7 @@ def teste():
     linha = [
         "TESTE999/26",
         "Licitação Teste",
-        "Objeto completo de teste manual",
+        "Objeto de teste com filtro edital",
         agora,
         "https://teste.com",
         agora
@@ -87,7 +122,7 @@ def health():
     return "ok", 200
 
 # -------------------------
-# MONITOR EM THREAD
+# MONITOR THREAD
 # -------------------------
 def iniciar_monitor():
     time.sleep(10)
