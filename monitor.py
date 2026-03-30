@@ -1,11 +1,8 @@
 import time
+import requests
 from datetime import datetime
 import os
-
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.chrome.options import Options
+import re
 
 URL = "https://www.embasa.ba.gov.br/fornecedor/form.jsp?sys=FOR&action=openform&formID=464569229"
 
@@ -33,122 +30,66 @@ def salvar_estado(itens):
         f.write("\n".join(itens))
 
 # -------------------------
-# EXTRAIR OBJETO
+# EXTRAIR DADOS
 # -------------------------
 
-def extrair_objeto(pagina):
-    linhas = pagina.split("\n")
+def extrair_registros(texto):
+    linhas = [l.strip().lower() for l in texto.split("\n") if l.strip()]
 
-    for i, linha in enumerate(linhas):
-        if any(p in linha for p in ["objeto", "descrição", "referente", "finalidade"]):
-            return " ".join(linhas[i:i+2])[:300]
+    registros = []
 
-    return ""
+    for i in range(len(linhas)):
+        linha = linhas[i]
+
+        if "/" in linha and any(c.isdigit() for c in linha):
+            codigo = linha
+
+            try:
+                data_str = linhas[i+3]
+                data = datetime.strptime(data_str, "%d/%m/%Y")
+            except:
+                continue
+
+            registros.append({
+                "codigo": codigo,
+                "data": data,
+                "data_str": data_str
+            })
+
+    registros.sort(key=lambda x: x["data"], reverse=True)
+    return registros[:10]
 
 # -------------------------
 # MONITOR
 # -------------------------
 
 def monitor():
-    options = Options()
-    options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--remote-debugging-port=9222")
-
-    driver = webdriver.Chrome(
-        service=Service(ChromeDriverManager().install()),
-        options=options
-    )
-
-    print("🔎 Monitor rodando...")
+    print("🔎 Monitor rodando (SEM SELENIUM)...")
 
     while True:
         try:
-            driver.get(URL)
-            time.sleep(5)
+            r = requests.get(URL, timeout=30)
+            texto = r.text.lower()
 
-            texto = driver.find_element("tag name", "body").text.lower()
-            linhas = [l.strip() for l in texto.split("\n") if l.strip()]
-
-            registros = []
-
-            # -------------------------
-            # EXTRAÇÃO DOS DADOS
-            # -------------------------
-            for i in range(len(linhas)):
-                linha = linhas[i]
-
-                if "/" in linha and any(c.isdigit() for c in linha):
-                    codigo = linha
-                    data_str = linhas[i+3] if i+3 < len(linhas) else ""
-
-                    try:
-                        data = datetime.strptime(data_str, "%d/%m/%Y")
-                    except:
-                        continue
-
-                    registros.append({
-                        "codigo": codigo,
-                        "data": data,
-                        "data_str": data_str
-                    })
-
-            # -------------------------
-            # ORDENAR POR DATA (RECENTE PRIMEIRO)
-            # -------------------------
-            registros.sort(key=lambda x: x["data"], reverse=True)
-
-            # LIMITAR A 10
-            registros = registros[:10]
+            registros = extrair_registros(texto)
 
             itens_atuais = set()
-            elementos = driver.find_elements("tag name", "a")
 
             for r in registros:
                 codigo = r["codigo"]
                 data_str = r["data_str"]
 
-                link = ""
-
-                # -------------------------
-                # PEGAR LINK
-                # -------------------------
-                for el in elementos:
-                    if codigo in el.text.lower():
-                        link = el.get_attribute("href")
-                        break
+                # tenta capturar link
+                link_match = re.search(r'href="([^"]+)"[^>]*>' + re.escape(codigo), texto)
+                link = link_match.group(1) if link_match else ""
 
                 objeto = ""
 
-                # -------------------------
-                # ABRIR LINK PARA PEGAR OBJETO
-                # -------------------------
-                if link:
-                    try:
-                        driver.execute_script("window.open(arguments[0]);", link)
-                        driver.switch_to.window(driver.window_handles[1])
-
-                        time.sleep(3)
-
-                        pagina = driver.find_element("tag name", "body").text.lower()
-                        objeto = extrair_objeto(pagina)
-
-                        driver.close()
-                        driver.switch_to.window(driver.window_handles[0])
-
-                    except Exception as e:
-                        print("Erro ao abrir link:", e)
-
                 item = f"{codigo} | {data_str} | {objeto} | {link}"
-                itens_atuais.add(item.lower())
+                itens_atuais.add(item)
 
-            # -------------------------
-            # COMPARAR COM ESTADO
-            # -------------------------
-            itens_antigos = carregar_estado()
-            novos = itens_atuais - itens_antigos
+            antigos = carregar_estado()
+            novos = itens_atuais - antigos
 
             if novos:
                 agora = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -162,13 +103,9 @@ def monitor():
                 salvar_estado(itens_atuais)
 
         except Exception as e:
-            print("Erro geral:", e)
+            print("Erro:", e)
 
-        # -------------------------
-        # TEMPO DE MONITORAMENTO (10 MIN)
-        # -------------------------
-        time.sleep(600)
-
+        time.sleep(600)  # 10 minutos
 
 # -------------------------
 # START
