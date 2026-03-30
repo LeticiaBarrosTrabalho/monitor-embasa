@@ -1,6 +1,7 @@
 from flask import Flask
 import threading
 import os
+import time
 
 from monitor import monitor
 
@@ -27,19 +28,13 @@ def home():
                 font-family: Arial;
                 background: #0f172a;
                 color: white;
-                margin: 0;
                 padding: 20px;
-            }
-            h1 {
-                text-align: center;
             }
             .card {
                 background: #1e293b;
                 padding: 15px;
-                margin: 10px auto;
+                margin: 10px;
                 border-radius: 10px;
-                max-width: 800px;
-                box-shadow: 0 0 10px rgba(0,0,0,0.3);
             }
         </style>
     </head>
@@ -50,27 +45,25 @@ def home():
     for linha in reversed(linhas):
         html += f'<div class="card">{linha}</div>'
 
-    html += """
-    </body>
-    </html>
-    """
-
+    html += "</body></html>"
     return html
 
 # -------------------------
-# MONITOR EM BACKGROUND
+# MONITOR EM BACKGROUND (COM DELAY)
 # -------------------------
 
 def iniciar_monitor():
+    time.sleep(10)  # ⬅️ MUITO IMPORTANTE (deixa o servidor subir primeiro)
     monitor()
 
-# Thread em modo daemon (IMPORTANTE pro Render)
-threading.Thread(target=iniciar_monitor, daemon=True).start()
+thread = threading.Thread(target=iniciar_monitor)
+thread.daemon = True
+thread.start()
 
 # -------------------------
-# START DO SERVIDOR
+# START
 # -------------------------
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))  # ESSENCIAL PRO RENDER
+    port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
