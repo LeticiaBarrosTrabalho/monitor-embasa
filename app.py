@@ -4,9 +4,13 @@ import threading
 import os
 import time
 from datetime import datetime
+import pytz
 from monitor import monitor
 
 app = Flask(__name__)
+
+# FUSO BRASIL
+fuso = pytz.timezone("America/Sao_Paulo")
 
 # -------------------------
 # DASHBOARD COM FILTROS
@@ -18,15 +22,9 @@ def dashboard():
 
     df = pd.read_csv("historico.csv")
 
-    # -------------------------
-    # PEGAR FILTROS DA URL
-    # -------------------------
     tipo = request.args.get("tipo", "")
     busca = request.args.get("busca", "")
 
-    # -------------------------
-    # APLICAR FILTROS
-    # -------------------------
     if tipo:
         df = df[df["objeto"].str.contains(tipo, case=False, na=False)]
 
@@ -56,6 +54,7 @@ def dashboard():
                 color:white; 
                 border-radius:8px; 
                 cursor:pointer; 
+                margin:5px;
             }
         </style>
     </head>
@@ -75,8 +74,6 @@ def dashboard():
             <button type="submit">Filtrar</button>
         </form>
 
-        <br>
-
         <form action="/teste">
             <button>🚀 Testar Notificação</button>
         </form>
@@ -93,7 +90,7 @@ def dashboard():
 # -------------------------
 @app.route("/teste")
 def teste():
-    agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+    agora = datetime.now(fuso).strftime("%d/%m/%Y %H:%M")
 
     linha = [
         "TESTE999/26",
@@ -122,7 +119,7 @@ def health():
     return "ok", 200
 
 # -------------------------
-# MONITOR THREAD
+# MONITOR EM BACKGROUND
 # -------------------------
 def iniciar_monitor():
     time.sleep(10)

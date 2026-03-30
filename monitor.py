@@ -3,12 +3,19 @@ import requests
 from datetime import datetime
 from bs4 import BeautifulSoup
 import os
+import pytz
 
+# CONFIG
 URL = "https://www.embasa.ba.gov.br/fornecedor/form.jsp?sys=FOR&action=openform&formID=464569229"
-
-INTERVALO = 300  # 5 minutos
+INTERVALO = 300
 ARQUIVO = "historico.csv"
 
+# FUSO HORÁRIO BRASIL
+fuso = pytz.timezone("America/Sao_Paulo")
+
+# -------------------------
+# SALVAR DADOS
+# -------------------------
 def salvar(dados):
     existe = os.path.exists(ARQUIVO)
 
@@ -18,6 +25,9 @@ def salvar(dados):
 
         f.write(",".join(dados) + "\n")
 
+# -------------------------
+# EXTRAÇÃO
+# -------------------------
 def extrair():
     dados = []
 
@@ -47,18 +57,21 @@ def extrair():
     except Exception as e:
         print("Erro ao acessar site:", e)
 
-    # fallback (garante que nunca fique vazio)
+    # fallback (nunca fica vazio)
     if not dados:
         dados.append([
             "TESTE123/26",
             "Licitação Teste",
             "Objeto de teste automático",
-            datetime.now().strftime("%d/%m/%Y"),
+            datetime.now(fuso).strftime("%d/%m/%Y"),
             URL
         ])
 
     return dados
 
+# -------------------------
+# MONITOR
+# -------------------------
 def monitor():
     print("🔎 Monitor rodando 24h...")
 
@@ -74,7 +87,7 @@ def monitor():
                 if chave not in vistos:
                     vistos.add(chave)
 
-                    agora = datetime.now().strftime("%d/%m/%Y %H:%M")
+                    agora = datetime.now(fuso).strftime("%d/%m/%Y %H:%M")
 
                     salvar(item + [agora])
 
