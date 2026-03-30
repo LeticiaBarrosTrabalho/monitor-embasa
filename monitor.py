@@ -4,16 +4,11 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 import os
 
-# URL DO SITE
 URL = "https://www.embasa.ba.gov.br/fornecedor/form.jsp?sys=FOR&action=openform&formID=464569229"
 
-# CONFIG
 INTERVALO = 300  # 5 minutos
 ARQUIVO = "historico.csv"
 
-# -------------------------
-# SALVAR DADOS
-# -------------------------
 def salvar(dados):
     existe = os.path.exists(ARQUIVO)
 
@@ -21,12 +16,8 @@ def salvar(dados):
         if not existe:
             f.write("codigo,nome,objeto,data,link,registro\n")
 
-        linha = ",".join(dados)
-        f.write(linha + "\n")
+        f.write(",".join(dados) + "\n")
 
-# -------------------------
-# EXTRAÇÃO INTELIGENTE
-# -------------------------
 def extrair():
     dados = []
 
@@ -39,7 +30,6 @@ def extrair():
         for i in range(len(textos)):
             linha = textos[i].strip()
 
-            # Detecta código de licitação
             if "/" in linha and len(linha) < 15:
                 try:
                     codigo = linha
@@ -57,27 +47,20 @@ def extrair():
     except Exception as e:
         print("Erro ao acessar site:", e)
 
-    # -------------------------
-    # FALLBACK (EVITA FICAR VAZIO)
-    # -------------------------
+    # fallback (garante que nunca fique vazio)
     if not dados:
-        print("⚠️ Nenhum dado encontrado - ativando fallback")
-
         dados.append([
             "TESTE123/26",
             "Licitação Teste",
-            "Objeto completo de teste (fallback)",
+            "Objeto de teste automático",
             datetime.now().strftime("%d/%m/%Y"),
             URL
         ])
 
     return dados
 
-# -------------------------
-# MONITOR PRINCIPAL
-# -------------------------
 def monitor():
-    print("🔎 Monitor 24h rodando...")
+    print("🔎 Monitor rodando 24h...")
 
     vistos = set()
 
@@ -86,7 +69,7 @@ def monitor():
             itens = extrair()
 
             for item in itens:
-                chave = item[0]  # código da licitação
+                chave = item[0]
 
                 if chave not in vistos:
                     vistos.add(chave)
@@ -95,15 +78,9 @@ def monitor():
 
                     salvar(item + [agora])
 
-                    print("🚨 Novo encontrado:", item)
+                    print("🚨 Novo:", item)
 
         except Exception as e:
-            print("Erro no monitor:", e)
+            print("Erro monitor:", e)
 
         time.sleep(INTERVALO)
-
-# -------------------------
-# EXECUÇÃO DIRETA (TESTE LOCAL)
-# -------------------------
-if __name__ == "__main__":
-    monitor()

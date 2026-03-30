@@ -11,10 +11,10 @@ while True:
         r = requests.get(URL)
         html = r.text
 
-        blocos = html.split('<div class="card">')[1:]
+        blocos = html.split('<tr>')[1:]
 
         for b in blocos:
-            texto = b.split('</div>')[0]
+            texto = b.split('</tr>')[0]
 
             if texto not in vistos:
                 vistos.add(texto)

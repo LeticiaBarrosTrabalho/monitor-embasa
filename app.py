@@ -7,6 +7,9 @@ from monitor import monitor
 
 app = Flask(__name__)
 
+# -------------------------
+# DASHBOARD
+# -------------------------
 @app.route("/")
 def dashboard():
     if not os.path.exists("historico.csv"):
@@ -30,18 +33,32 @@ def dashboard():
         <h1>📊 Dashboard de Licitações</h1>
     """
 
-    html += df.to_html(index=False)
+    html += df.tail(50).to_html(index=False)
 
     html += "</body></html>"
 
     return html
 
-def iniciar():
+# -------------------------
+# HEALTH CHECK (IMPORTANTE)
+# -------------------------
+@app.route("/health")
+def health():
+    return "ok", 200
+
+# -------------------------
+# MONITOR EM THREAD
+# -------------------------
+def iniciar_monitor():
     time.sleep(10)
     monitor()
 
-threading.Thread(target=iniciar, daemon=True).start()
+thread = threading.Thread(target=iniciar_monitor, daemon=True)
+thread.start()
 
+# -------------------------
+# START
+# -------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
