@@ -1,26 +1,33 @@
 import time
+import requests
 from plyer import notification
 
-ARQUIVO = "historico.txt"
-ultimo = ""
+URL = "https://monitor-embasa.onrender.com"
+
+vistos = set()
 
 while True:
     try:
-        with open(ARQUIVO, encoding="utf-8") as f:
-            linhas = f.readlines()
+        r = requests.get(URL)
+        html = r.text
 
-        if linhas:
-            ultima = linhas[-1]
+        blocos = html.split('<div class="card">')[1:]
 
-            if ultima != ultimo:
+        for b in blocos:
+            texto = b.split('</div>')[0]
+
+            if texto not in vistos:
+                vistos.add(texto)
+
                 notification.notify(
                     title="Nova Licitação",
-                    message=ultima,
+                    message=texto,
                     timeout=10
                 )
-                ultimo = ultima
 
-    except:
-        pass
+                print("🔔 Nova:", texto)
 
-    time.sleep(60)
+    except Exception as e:
+        print("Erro:", e)
+
+    time.sleep(10)

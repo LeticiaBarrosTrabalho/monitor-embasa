@@ -1,61 +1,75 @@
 import time
 import requests
 from datetime import datetime
+from bs4 import BeautifulSoup
 import os
-import re
 
 URL = "https://www.embasa.ba.gov.br/fornecedor/form.jsp?sys=FOR&action=openform&formID=464569229"
 
-ARQUIVO_LOG = "historico.txt"
-ARQUIVO_ESTADO = "estado.txt"
+INTERVALO = 900  # 15 min
+ARQUIVO = "historico.csv"
 
-INTERVALO = 900  # 15 minutos
+def salvar(dados):
+    existe = os.path.exists(ARQUIVO)
 
-def salvar_log(msg):
-    with open(ARQUIVO_LOG, "a", encoding="utf-8") as f:
-        f.write(msg + "\n")
+    with open(ARQUIVO, "a", encoding="utf-8") as f:
+        if not existe:
+            f.write("codigo,nome,objeto,data,link,registro\n")
 
-def carregar_estado():
-    if os.path.exists(ARQUIVO_ESTADO):
-        with open(ARQUIVO_ESTADO, encoding="utf-8") as f:
-            return set(f.read().splitlines())
-    return set()
+        f.write(",".join(dados) + "\n")
 
-def salvar_estado(itens):
-    with open(ARQUIVO_ESTADO, "w", encoding="utf-8") as f:
-        f.write("\n".join(itens))
+def extrair():
+    r = requests.get(URL, timeout=30)
+    soup = BeautifulSoup(r.text, "html.parser")
+
+    textos = soup.get_text("\n").split("\n")
+
+    dados = []
+    i = 0
+
+    while i < len(textos):
+        linha = textos[i].strip().lower()
+
+        if "/" in linha and len(linha) < 15:
+            codigo = linha
+
+            try:
+                nome = textos[i+1].strip()
+                status = textos[i+2].strip()
+                data = textos[i+3].strip()
+
+                objeto = f"{nome} - {status}"
+
+                link = URL
+
+                dados.append([codigo, nome, objeto, data, link])
+            except:
+                pass
+
+        i += 1
+
+    return dados
 
 def monitor():
-    print("🔎 Monitor rodando 24h...")
+    vistos = set()
+
+    print("🔎 Monitor avançado rodando...")
 
     while True:
         try:
-            r = requests.get(URL, timeout=30)
-            html = r.text.lower()
+            itens = extrair()
 
-            codigos = ["TESTE123/26"]
+            for item in itens:
+                chave = item[0]
 
-            itens_atuais = set()
+                if chave not in vistos:
+                    vistos.add(chave)
 
-            for c in codigos[:10]:
-                link = URL
-                objeto = "ver no site"
+                    agora = datetime.now().strftime("%d/%m/%Y %H:%M")
 
-                item = f"{c} | {objeto} | {link}"
-                itens_atuais.add(item)
+                    salvar(item + [agora])
 
-            antigos = carregar_estado()
-            novos = itens_atuais - antigos
-
-            if novos:
-                agora = datetime.now().strftime("%d/%m/%Y %H:%M")
-
-                for item in novos:
-                    msg = f"{item} | {agora}"
-                    print("🚨 Nova licitação:", msg)
-                    salvar_log(msg)
-
-                salvar_estado(itens_atuais)
+                    print("🚨 Novo:", item)
 
         except Exception as e:
             print("Erro:", e)
