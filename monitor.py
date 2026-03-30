@@ -33,7 +33,7 @@ def monitor():
             r = requests.get(URL, timeout=30)
             html = r.text.lower()
 
-            codigos = re.findall(r"\w+\d+/\d+", html)
+            codigos = ["TESTE123/26"]
 
             itens_atuais = set()
 
