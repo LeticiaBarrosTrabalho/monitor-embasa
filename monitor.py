@@ -1,44 +1,54 @@
 import time
-import requests
 from datetime import datetime
-from bs4 import BeautifulSoup
 import os
+
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
 
 URL = "https://www.embasa.ba.gov.br/fornecedor/form.jsp?sys=FOR&action=openform&formID=464569229"
 
-INTERVALO = 900  # 15 min
 ARQUIVO = "historico.csv"
+INTERVALO = 900
 
-def salvar(dados):
+def iniciar_driver():
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+
+    return webdriver.Chrome(options=options)
+
+def salvar(linha):
     existe = os.path.exists(ARQUIVO)
 
     with open(ARQUIVO, "a", encoding="utf-8") as f:
         if not existe:
             f.write("codigo,nome,objeto,data,link,registro\n")
 
-        f.write(",".join(dados) + "\n")
+        f.write(",".join(linha) + "\n")
 
-def extrair():
-    r = requests.get(URL, timeout=30)
-    soup = BeautifulSoup(r.text, "html.parser")
+def extrair(driver):
+    driver.get(URL)
+    time.sleep(5)
 
-    textos = soup.get_text("\n").split("\n")
+    elementos = driver.find_elements(By.TAG_NAME, "tr")
 
     dados = []
-    i = 0
 
-    while i < len(textos):
-        linha = textos[i].strip().lower()
+    for el in elementos:
+        texto = el.text.strip()
 
-        if "/" in linha and len(linha) < 15:
-            codigo = linha
+        if "/" in texto and len(texto) > 20:
+            partes = texto.split("\n")
 
             try:
-                nome = textos[i+1].strip()
-                status = textos[i+2].strip()
-                data = textos[i+3].strip()
+                codigo = partes[0]
+                nome = partes[1]
+                status = partes[2]
+                data = partes[3]
 
-                objeto = f"{nome} - {status}"
+                objeto = " | ".join(partes)
 
                 link = URL
 
@@ -46,18 +56,17 @@ def extrair():
             except:
                 pass
 
-        i += 1
-
     return dados
 
 def monitor():
-    vistos = set()
+    print("🔎 Monitor com Selenium rodando...")
 
-    print("🔎 Monitor avançado rodando...")
+    vistos = set()
+    driver = iniciar_driver()
 
     while True:
         try:
-            itens = extrair()
+            itens = extrair(driver)
 
             for item in itens:
                 chave = item[0]
@@ -69,12 +78,9 @@ def monitor():
 
                     salvar(item + [agora])
 
-                    print("🚨 Novo:", item)
+                    print("🚨 Novo completo:", item)
 
         except Exception as e:
             print("Erro:", e)
 
         time.sleep(INTERVALO)
-
-if __name__ == "__main__":
-    monitor()
