@@ -79,7 +79,9 @@ def dashboard():
         </form>
     """
 
-    html += df.tail(50).to_html(index=False)
+    df["link"] = df["link"].apply(lambda x: f'<a href="{x}" target="_blank">Abrir</a>')
+
+html += df.tail(50).to_html(index=False, escape=False)
 
     html += "</body></html>"
 

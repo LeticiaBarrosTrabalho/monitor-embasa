@@ -47,7 +47,7 @@ def extrair():
                     status = textos[i+2].strip()
                     data = textos[i+3].strip()
 
-                    objeto = f"{nome} | {status}"
+                    objeto = f"{nome} | {status}".replace(",", " ")
                     link = URL
 
                     dados.append([codigo, nome, objeto, data, link])
