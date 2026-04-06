@@ -1,119 +1,97 @@
-from flask import Flask, request
-import pandas as pd
+import time
+import requests
 import os
-from datetime import datetime
-import pytz
+import json
+from winotify import Notification, audio
 
-app = Flask(__name__)
+# 🔗 URL da API
+URL = "https://monitor-embasa.onrender.com/dados"
 
-ARQUIVO = "historico.csv"
-fuso = pytz.timezone("America/Sao_Paulo")
-
-# -------------------------
-# GARANTE ARQUIVO
-# -------------------------
-if not os.path.exists(ARQUIVO):
-    pd.DataFrame(
-        columns=["codigo","nome","objeto","data","link","registro"]
-    ).to_csv(ARQUIVO, index=False)
+# 📁 Controle local
+ARQUIVO_LOCAL = "vistos.txt"
 
 # -------------------------
-# HOME
+# CARREGA HISTÓRICO
 # -------------------------
-@app.route("/")
-def home():
+if os.path.exists(ARQUIVO_LOCAL):
+    with open(ARQUIVO_LOCAL, "r", encoding="utf-8") as f:
+        vistos = set(f.read().splitlines())
+else:
+    vistos = set()
+
+print("🔔 Notificador rodando em segundo plano...")
+
+# -------------------------
+# LOOP PRINCIPAL
+# -------------------------
+while True:
     try:
-        df = pd.read_csv(ARQUIVO)
-    except:
-        df = pd.DataFrame(columns=["codigo","nome","objeto","data","link","registro"])
+        print("🔄 Verificando servidor...")
 
-    codigo = request.args.get("codigo", "")
-    objeto = request.args.get("objeto", "")
+        try:
+            # 🔥 timeout maior (Render pode estar dormindo)
+            r = requests.get(URL, timeout=60)
+            print("✅ Conectado ao servidor")
+        except requests.exceptions.ReadTimeout:
+            print("⏳ Servidor dormindo... tentando novamente em 15s")
+            time.sleep(15)
+            continue
+        except Exception as e:
+            print("❌ Erro de conexão:", e)
+            time.sleep(15)
+            continue
 
-    if codigo:
-        df = df[df["codigo"].astype(str).str.contains(codigo, case=False, na=False)]
+        # 🔍 Processa JSON com segurança
+        try:
+            dados = json.loads(r.text)
+        except Exception as e:
+            print("❌ Erro ao ler JSON:", e)
+            time.sleep(10)
+            continue
 
-    if objeto:
-        df = df[df["objeto"].astype(str).str.contains(objeto, case=False, na=False)]
+        novos = []
 
-    if not df.empty:
-        df = df.sort_values(by="registro", ascending=False)
-        df["link"] = df["link"].apply(lambda x: f'<a href="{x}" target="_blank">🔗 Abrir</a>')
-        tabela = df.to_html(classes="table", index=False, escape=False)
-    else:
-        tabela = "<p>Sem dados ainda</p>"
+        # 🔍 Detecta novos registros (chave única)
+        for row in dados:
+            codigo = str(row.get("codigo", "")).strip()
+            registro = str(row.get("registro", "")).strip()
 
-    return f"""
-    <html>
-    <head>
-        <title>Monitor EMBASA</title>
-        <style>
-            body {{ font-family: Arial; background: #f4f6f9; padding: 20px; }}
-            .card {{ background: white; padding: 20px; border-radius: 10px; }}
-            table {{ width: 100%; border-collapse: collapse; }}
-            th {{ background: #0078D4; color: white; padding: 10px; }}
-            td {{ padding: 8px; border-bottom: 1px solid #ddd; }}
-            input {{ padding: 8px; margin: 5px; }}
-            button {{ padding: 8px 15px; background: #0078D4; color: white; border: none; }}
-        </style>
-    </head>
-    <body>
+            if not codigo:
+                continue
 
-    <div class="card">
-        <h2>📊 Monitor EMBASA</h2>
+            chave = f"{codigo}-{registro}"
 
-        <form>
-            <input name="codigo" placeholder="Código">
-            <input name="objeto" placeholder="Objeto">
-            <button type="submit">Filtrar</button>
-        </form>
+            if chave not in vistos:
+                vistos.add(chave)
+                novos.append(row)
 
-        <br>
+        # 💾 Salva controle local
+        with open(ARQUIVO_LOCAL, "w", encoding="utf-8") as f:
+            for item in vistos:
+                f.write(item + "\n")
 
-        <a href="/teste"><button>🚀 Testar</button></a>
+        # 🔔 Envia notificações
+        for row in novos:
+            mensagem = f'{row.get("codigo","")} | {row.get("nome","")}'
 
-        <br><br>
+            try:
+                toast = Notification(
+                    app_id="Monitor EMBASA",
+                    title="🚨 Nova Licitação EMBASA",
+                    msg=mensagem,
+                    duration="short"
+                )
 
-        {tabela}
-    </div>
+                toast.set_audio(audio.Default, loop=False)
+                toast.show()
 
-    </body>
-    </html>
-    """
+                print("🔔 Nova detectada:", mensagem)
 
-# -------------------------
-# API DADOS
-# -------------------------
-@app.route("/dados")
-def dados():
-    try:
-        df = pd.read_csv(ARQUIVO)
-        return df.to_json(orient="records")
-    except:
-        return "[]"
+            except Exception as e:
+                print("❌ Erro ao notificar:", e)
 
-# -------------------------
-# TESTE
-# -------------------------
-@app.route("/teste")
-def teste():
-    agora = datetime.now(fuso).strftime("%d/%m/%Y %H:%M:%S")
+    except Exception as e:
+        print("❌ Erro geral:", e)
 
-    linha = pd.DataFrame([[
-        f"TESTE{datetime.now().strftime('%H%M%S')}/26",
-        "Licitação Teste",
-        "Objeto teste automático",
-        agora,
-        "https://teste.com",
-        agora
-    ]], columns=["codigo","nome","objeto","data","link","registro"])
-
-    linha.to_csv(ARQUIVO, mode="a", header=False, index=False)
-
-    return "OK"
-
-# -------------------------
-# EXECUÇÃO
-# -------------------------
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    # ⏱ Intervalo
+    time.sleep(10)
