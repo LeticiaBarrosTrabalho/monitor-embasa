@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard Monitor</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial;
+            background: #0f172a;
+            color: white;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        .log {
+            background: #1e293b;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid #22c55e;
+        }
+
+        .hora {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>📡 Monitor de Alterações</h1>
+
+<div id="logs">
+    {% for r in registros %}
+        <div class="log">
+            {{ r.texto }} <br>
+            <span class="hora">{{ r.hora }}</span>
+        </div>
+    {% endfor %}
+</div>
+
+<script>
+const socket = io();
+
+socket.on("nova_notificacao", function(data) {
+    const div = document.createElement("div");
+    div.className = "log";
+    div.innerHTML = `
+        ${data.texto} <br>
+        <span class="hora">${data.hora}</span>
+    `;
+
+    document.getElementById("logs").prepend(div);
+
+    // alerta no navegador (ESTÁVEL)
+    alert("🔔 Nova alteração detectada!");
+});
+</script>
+
+</body>
+</html>

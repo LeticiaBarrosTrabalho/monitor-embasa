@@ -1,7 +1,6 @@
 flask
-pandas
+flask_socketio
 requests
-beautifulsoup4
 pytz
-winotify
 gunicorn
+eventlet
