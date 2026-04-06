@@ -1,9 +1,7 @@
 import sqlite3
 
-DB = "dados.db"
-
 def conectar():
-    return sqlite3.connect(DB)
+    return sqlite3.connect("dados.db")
 
 def criar_tabela():
     conn = conectar()
