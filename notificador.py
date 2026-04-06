@@ -1,40 +1,43 @@
 import requests
 import time
-import os
 from winotify import Notification
 
 URL = "https://monitor-embasa.onrender.com/dados"
-ARQUIVO = "controle.txt"
+ultimo_id = 0
 
-if os.path.exists(ARQUIVO):
-    with open(ARQUIVO) as f:
-        ultimo = int(f.read().strip())
-else:
-    ultimo = 0
-
-print("🔔 Notificador rodando...")
+print("🔔 Notificador iniciado...")
 
 while True:
     try:
-        r = requests.get(URL, timeout=60)
+        r = requests.get(URL, timeout=30)
         dados = r.json()
 
-        novos = [d for d in dados if d["id"] > ultimo]
+        if not dados:
+            print("Sem dados")
+            time.sleep(10)
+            continue
 
-        if novos:
+        maior_id = max(d["id"] for d in dados)
+
+        if maior_id > ultimo_id:
+
+            novos = [d for d in dados if d["id"] > ultimo_id]
+
             for n in novos:
                 Notification(
-                    app_id="EMBASA",
-                    title="Nova Licitação",
+                    app_id="Monitor EMBASA",
+                    title="🚨 Nova Licitação",
                     msg=f'{n["codigo"]} - {n["nome"]}'
                 ).show()
 
-            ultimo = max(d["id"] for d in dados)
+                print("Notificado:", n["codigo"])
 
-            with open(ARQUIVO, "w") as f:
-                f.write(str(ultimo))
+            ultimo_id = maior_id
+
+        else:
+            print("Sem novidades")
 
     except Exception as e:
         print("Erro:", e)
 
-    time.sleep(15)
+    time.sleep(10)

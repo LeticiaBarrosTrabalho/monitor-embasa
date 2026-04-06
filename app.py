@@ -10,44 +10,74 @@ criar_tabela()
 # -------------------------
 def carregar():
     conn = conectar()
-    df = pd.read_sql_query("SELECT * FROM licitacoes", conn)
+    df = pd.read_sql_query("SELECT * FROM licitacoes ORDER BY id DESC", conn)
     conn.close()
     return df
 
 # -------------------------
-# HOME (DASHBOARD)
+# HOME (SOMENTE REGISTROS)
 # -------------------------
 @app.route("/")
 def home():
     return """
     <html>
     <head>
-        <title>Dashboard EMBASA</title>
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <title>Monitor EMBASA</title>
         <style>
             body { font-family: Arial; background:#f4f6f9; padding:20px; }
-            .card { background:white; padding:20px; border-radius:10px; margin-bottom:20px; }
-            .table { width:100%; border-collapse:collapse; }
-            .table th { background:#0078D4; color:white; padding:10px; }
-            .table td { padding:8px; border-bottom:1px solid #ddd; }
-            button { padding:10px; background:#0078D4; color:white; border:none; border-radius:5px; cursor:pointer; }
+            .container { max-width:1000px; margin:auto; }
+
+            h2 { color:#0078D4; }
+
+            button {
+                padding:10px;
+                background:#0078D4;
+                color:white;
+                border:none;
+                border-radius:5px;
+                cursor:pointer;
+            }
+
+            table {
+                width:100%;
+                border-collapse:collapse;
+                background:white;
+                margin-top:20px;
+            }
+
+            th {
+                background:#0078D4;
+                color:white;
+                padding:10px;
+                text-align:left;
+            }
+
+            td {
+                padding:8px;
+                border-bottom:1px solid #ddd;
+            }
+
+            .novo {
+                background:#e8fff0;
+            }
         </style>
     </head>
 
     <body>
-    <h2>📊 Monitor EMBASA</h2>
+    <div class="container">
 
-    <button onclick="teste()">🚀 Testar Notificação</button>
+        <h2>📡 Monitor de Licitações</h2>
 
-    <br><br>
+        <button onclick="teste()">🚀 Teste de Notificação</button>
 
-    <canvas id="grafico"></canvas>
+        <table id="tabela"></table>
 
-    <br><br>
-
-    <table class="table" id="tabela"></table>
+    </div>
 
     <script>
+
+    let ultimoId = 0;
+
     function teste(){
         fetch('/teste')
     }
@@ -56,10 +86,22 @@ def home():
         fetch('/dados')
         .then(r=>r.json())
         .then(data=>{
-            let html = "<tr><th>Código</th><th>Nome</th><th>Objeto</th><th>Data</th><th>Link</th></tr>";
 
-            data.slice().reverse().forEach(d=>{
-                html += `<tr>
+            let html = `
+            <tr>
+                <th>Código</th>
+                <th>Nome</th>
+                <th>Objeto</th>
+                <th>Data</th>
+                <th>Link</th>
+            </tr>`;
+
+            data.forEach(d => {
+
+                let classe = d.id > ultimoId ? "novo" : "";
+
+                html += `
+                <tr class="${classe}">
                     <td>${d.codigo}</td>
                     <td>${d.nome}</td>
                     <td>${d.objeto}</td>
@@ -68,33 +110,18 @@ def home():
                 </tr>`;
             });
 
+            if(data.length > 0){
+                ultimoId = Math.max(...data.map(d=>d.id));
+            }
+
             document.getElementById("tabela").innerHTML = html;
 
-            // gráfico
-            const agrupado = {};
-            data.forEach(d=>{
-                const dia = d.registro.split(" ")[0];
-                agrupado[dia] = (agrupado[dia] || 0) + 1;
-            });
-
-            const labels = Object.keys(agrupado);
-            const valores = Object.values(agrupado);
-
-            new Chart(document.getElementById('grafico'), {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Registros por dia',
-                        data: valores
-                    }]
-                }
-            });
         });
     }
 
-    setInterval(atualizar, 10000);
+    setInterval(atualizar, 5000);
     atualizar();
+
     </script>
 
     </body>
