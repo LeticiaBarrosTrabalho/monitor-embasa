@@ -1,2 +1,6 @@
-flask-socketio
-eventlet
+flask
+pandas
+requests
+beautifulsoup4
+pytz
+gunicorn
