@@ -2,32 +2,11 @@ import requests
 import time
 from datetime import datetime
 from bs4 import BeautifulSoup
+from database import conectar
 import pytz
-from database import conectar, criar_tabela
 
 URL = "https://www.embasa.ba.gov.br/fornecedor/form.jsp?sys=FOR&action=openform&formID=464569229"
 fuso = pytz.timezone("America/Sao_Paulo")
-
-criar_tabela()
-
-def salvar(item):
-    conn = conectar()
-    cursor = conn.cursor()
-
-    # evita duplicado
-    cursor.execute("SELECT * FROM licitacoes WHERE codigo = ?", (item[0],))
-    if cursor.fetchone():
-        conn.close()
-        return False
-
-    cursor.execute("""
-    INSERT INTO licitacoes (codigo, nome, objeto, data, link, registro)
-    VALUES (?, ?, ?, ?, ?, ?)
-    """, item)
-
-    conn.commit()
-    conn.close()
-    return True
 
 def extrair():
     dados = []
@@ -50,30 +29,41 @@ def extrair():
                 objeto = f"{nome} | {status}"
                 link = URL
 
-                dados.append([
-                    codigo,
-                    nome,
-                    objeto,
-                    data,
-                    link,
-                    datetime.now(fuso).strftime("%d/%m/%Y %H:%M:%S")
-                ])
+                dados.append((codigo, nome, objeto, data, link))
             except:
                 pass
 
     return dados
 
-print("🔎 Monitor 24h rodando...")
+def monitor():
+    vistos = set()
 
-while True:
-    try:
-        itens = extrair()
+    while True:
+        try:
+            itens = extrair()
 
-        for item in itens:
-            if salvar(item):
-                print("🚨 Novo:", item)
+            conn = conectar()
+            cursor = conn.cursor()
 
-    except Exception as e:
-        print("Erro:", e)
+            for item in itens:
+                if item[0] not in vistos:
+                    vistos.add(item[0])
 
-    time.sleep(300)
+                    agora = datetime.now(fuso).strftime("%d/%m/%Y %H:%M:%S")
+
+                    cursor.execute("""
+                    INSERT INTO licitacoes (codigo, nome, objeto, data, link, registro)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """, item + (agora,))
+
+                    print("Novo:", item[0])
+
+            conn.commit()
+            conn.close()
+
+        except Exception as e:
+            print("Erro:", e)
+
+        time.sleep(300)
+
+monitor()

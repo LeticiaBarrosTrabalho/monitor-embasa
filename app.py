@@ -1,13 +1,8 @@
 from flask import Flask, jsonify
-from flask_socketio import SocketIO
 import pandas as pd
 from database import conectar, criar_tabela
-import threading
-import time
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
-
 criar_tabela()
 
 # -------------------------
@@ -20,96 +15,72 @@ def carregar():
     return df
 
 # -------------------------
-# MONITOR TEMPO REAL
-# -------------------------
-def monitor_socket():
-    ultimo_total = 0
-
-    while True:
-        try:
-            df = carregar()
-            total = len(df)
-
-            if total != ultimo_total:
-                socketio.emit("atualizar", df.to_dict(orient="records"))
-                print("📡 Atualização enviada via WebSocket")
-
-                ultimo_total = total
-
-        except Exception as e:
-            print("Erro socket:", e)
-
-        time.sleep(3)
-
-# thread em background
-threading.Thread(target=monitor_socket, daemon=True).start()
-
-# -------------------------
-# HOME
+# HOME (DASHBOARD)
 # -------------------------
 @app.route("/")
 def home():
     return """
     <html>
     <head>
-        <title>Dashboard EMBASA PRO</title>
-        <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+        <title>Dashboard EMBASA</title>
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <style>
+            body { font-family: Arial; background:#f4f6f9; padding:20px; }
+            .card { background:white; padding:20px; border-radius:10px; margin-bottom:20px; }
+            .table { width:100%; border-collapse:collapse; }
+            .table th { background:#0078D4; color:white; padding:10px; }
+            .table td { padding:8px; border-bottom:1px solid #ddd; }
+            button { padding:10px; background:#0078D4; color:white; border:none; border-radius:5px; cursor:pointer; }
+        </style>
     </head>
 
-    <body style="font-family:Arial; padding:20px; background:#f4f6f9">
+    <body>
+    <h2>📊 Monitor EMBASA</h2>
 
-    <h2>📊 Dashboard EMBASA (Tempo Real PRO)</h2>
-
-    <h3>Total: <span id="total">0</span></h3>
-
-    <button onclick="rodarTeste()">🚀 Teste</button>
+    <button onclick="teste()">🚀 Testar Notificação</button>
 
     <br><br>
+
     <canvas id="grafico"></canvas>
 
     <br><br>
-    <table border="1" id="tabela"></table>
+
+    <table class="table" id="tabela"></table>
 
     <script>
-    const socket = io();
+    function teste(){
+        fetch('/teste')
+    }
 
-    let grafico;
+    function atualizar(){
+        fetch('/dados')
+        .then(r=>r.json())
+        .then(data=>{
+            let html = "<tr><th>Código</th><th>Nome</th><th>Objeto</th><th>Data</th><th>Link</th></tr>";
 
-    socket.on("atualizar", function(data){
-        console.log("Atualizado!");
+            data.slice().reverse().forEach(d=>{
+                html += `<tr>
+                    <td>${d.codigo}</td>
+                    <td>${d.nome}</td>
+                    <td>${d.objeto}</td>
+                    <td>${d.data}</td>
+                    <td><a href="${d.link}" target="_blank">Abrir</a></td>
+                </tr>`;
+            });
 
-        document.getElementById("total").innerText = data.length;
+            document.getElementById("tabela").innerHTML = html;
 
-        // tabela
-        let html = "<tr><th>Código</th><th>Nome</th><th>Objeto</th><th>Data</th></tr>";
-        data.slice().reverse().forEach(d=>{
-            html += `<tr>
-                <td>${d.codigo}</td>
-                <td>${d.nome}</td>
-                <td>${d.objeto}</td>
-                <td>${d.data}</td>
-            </tr>`;
-        });
+            // gráfico
+            const agrupado = {};
+            data.forEach(d=>{
+                const dia = d.registro.split(" ")[0];
+                agrupado[dia] = (agrupado[dia] || 0) + 1;
+            });
 
-        document.getElementById("tabela").innerHTML = html;
+            const labels = Object.keys(agrupado);
+            const valores = Object.values(agrupado);
 
-        // gráfico
-        const agrupado = {};
-        data.forEach(d=>{
-            const dia = d.registro?.split(" ")[0];
-            agrupado[dia] = (agrupado[dia] || 0) + 1;
-        });
-
-        const labels = Object.keys(agrupado);
-        const valores = Object.values(agrupado);
-
-        if(grafico){
-            grafico.data.labels = labels;
-            grafico.data.datasets[0].data = valores;
-            grafico.update();
-        } else {
-            grafico = new Chart(document.getElementById('grafico'), {
+            new Chart(document.getElementById('grafico'), {
                 type: 'line',
                 data: {
                     labels: labels,
@@ -119,15 +90,11 @@ def home():
                     }]
                 }
             });
-        }
-
-        // alerta
-        alert("🚨 Nova licitação detectada!");
-    });
-
-    function rodarTeste(){
-        fetch('/teste');
+        });
     }
+
+    setInterval(atualizar, 10000);
+    atualizar();
     </script>
 
     </body>
@@ -172,10 +139,12 @@ def teste():
     conn.commit()
     conn.close()
 
-    return jsonify({"ok": True})
+    return jsonify({"status":"ok"})
 
 # -------------------------
 # START
 # -------------------------
 if __name__ == "__main__":
-    socketio.run(app, host="0.0.0.0", port=10000)
+    import os
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)

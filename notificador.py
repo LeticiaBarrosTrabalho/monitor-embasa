@@ -6,48 +6,35 @@ from winotify import Notification
 URL = "https://monitor-embasa.onrender.com/dados"
 ARQUIVO = "controle.txt"
 
-# -------------------------
-# CARREGA ÚLTIMO ID
-# -------------------------
 if os.path.exists(ARQUIVO):
-    with open(ARQUIVO, "r") as f:
-        ultimo_id = int(f.read().strip())
+    with open(ARQUIVO) as f:
+        ultimo = int(f.read().strip())
 else:
-    ultimo_id = 0
+    ultimo = 0
 
-print("🔔 Notificador estável rodando...")
+print("🔔 Notificador rodando...")
 
-# -------------------------
-# LOOP
-# -------------------------
 while True:
     try:
-        print("🔄 Verificando...")
-
         r = requests.get(URL, timeout=60)
         dados = r.json()
 
-        novos = [d for d in dados if d["id"] > ultimo_id]
+        novos = [d for d in dados if d["id"] > ultimo]
 
         if novos:
-            print(f"🚨 {len(novos)} novos registros")
-
-            for item in novos:
+            for n in novos:
                 Notification(
-                    app_id="Monitor EMBASA",
-                    title="🚨 Nova Licitação",
-                    msg=f'{item["codigo"]} - {item["nome"]}'
+                    app_id="EMBASA",
+                    title="Nova Licitação",
+                    msg=f'{n["codigo"]} - {n["nome"]}'
                 ).show()
 
-                print("🔔 Notificado:", item["codigo"])
-
-            # salva último ID
-            ultimo_id = max(d["id"] for d in dados)
+            ultimo = max(d["id"] for d in dados)
 
             with open(ARQUIVO, "w") as f:
-                f.write(str(ultimo_id))
+                f.write(str(ultimo))
 
     except Exception as e:
-        print("❌ Erro:", e)
+        print("Erro:", e)
 
     time.sleep(15)
