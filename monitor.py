@@ -1,11 +1,19 @@
 import time
 import requests
-from plyer import notification
 import pandas as pd
+from plyer import notification
+import os
 
 URL = "https://monitor-embasa.onrender.com/dados"
 
-vistos = set()
+ARQUIVO_LOCAL = "vistos.txt"
+
+# Carrega já vistos (IMPORTANTE)
+if os.path.exists(ARQUIVO_LOCAL):
+    with open(ARQUIVO_LOCAL, "r") as f:
+        vistos = set(f.read().splitlines())
+else:
+    vistos = set()
 
 print("🔔 Notificador rodando em segundo plano...")
 
@@ -16,12 +24,18 @@ while True:
         novos = []
 
         for _, row in df.iterrows():
-            chave = row["codigo"]
+            codigo = str(row["codigo"])
 
-            if chave not in vistos:
-                vistos.add(chave)
+            if codigo not in vistos:
+                vistos.add(codigo)
                 novos.append(row)
 
+        # Salva histórico local (EVITA DUPLICAÇÃO)
+        with open(ARQUIVO_LOCAL, "w") as f:
+            for item in vistos:
+                f.write(item + "\n")
+
+        # 🔔 Notifica
         for row in novos:
             mensagem = f'{row["codigo"]} | {row["nome"]}'
 
@@ -36,4 +50,4 @@ while True:
     except Exception as e:
         print("Erro:", e)
 
-    time.sleep(15)
+    time.sleep(10)

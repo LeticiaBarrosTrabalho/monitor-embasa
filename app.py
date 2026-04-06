@@ -1,10 +1,15 @@
-from flask import Flask, request
+from flask import Flask, request, redirect
 import pandas as pd
 import os
+from datetime import datetime
+import pytz
 
 app = Flask(__name__)
 
 ARQUIVO = "historico.csv"
+
+# Fuso horário Brasil
+fuso = pytz.timezone("America/Sao_Paulo")
 
 # -------------------------
 # GARANTE ARQUIVO
@@ -15,7 +20,7 @@ if not os.path.exists(ARQUIVO):
     ).to_csv(ARQUIVO, index=False)
 
 # -------------------------
-# API (USADA PELO NOTIFICADOR)
+# API (NOTIFICADOR)
 # -------------------------
 @app.route("/dados")
 def dados():
@@ -26,7 +31,29 @@ def dados():
         return []
 
 # -------------------------
-# DASHBOARD (ROTA PRINCIPAL)
+# BOTÃO TESTE
+# -------------------------
+@app.route("/teste")
+def teste():
+    agora = datetime.now(fuso).strftime("%d/%m/%Y %H:%M:%S")
+
+    codigo = f"TESTE{datetime.now().strftime('%H%M%S')}/26"
+
+    nova_linha = pd.DataFrame([[
+        codigo,
+        "Licitação Teste",
+        "Objeto de teste automático",
+        agora,
+        "https://teste.com",
+        agora
+    ]], columns=["codigo","nome","objeto","data","link","registro"])
+
+    nova_linha.to_csv(ARQUIVO, mode="a", header=False, index=False)
+
+    return redirect("/")
+
+# -------------------------
+# DASHBOARD PRINCIPAL
 # -------------------------
 @app.route("/")
 def home():
@@ -58,7 +85,6 @@ def home():
     else:
         tabela = "<p>Sem dados ainda</p>"
 
-    # HTML ESTILO POWER BI
     return f"""
     <html>
     <head>
@@ -117,6 +143,12 @@ def home():
             </form>
 
             <br>
+
+            <a href="/teste">
+                <button>🚀 Testar Notificação</button>
+            </a>
+
+            <br><br>
 
             {tabela}
         </div>
