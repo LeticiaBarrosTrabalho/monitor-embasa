@@ -1,96 +1,198 @@
-import time
-import requests
+from flask import Flask, request
+import pandas as pd
 import os
-import json
+from datetime import datetime
+import pytz
 
-# 🔗 URL da API
-URL = "https://monitor-embasa.onrender.com/dados"
+app = Flask(__name__)
 
-# 📁 Controle local
-ARQUIVO_LOCAL = "vistos.txt"
-
-# -------------------------
-# CARREGA HISTÓRICO
-# -------------------------
-if os.path.exists(ARQUIVO_LOCAL):
-    with open(ARQUIVO_LOCAL, "r", encoding="utf-8") as f:
-        vistos = set(f.read().splitlines())
-else:
-    vistos = set()
-
-print("🔔 Notificador rodando em segundo plano...")
+ARQUIVO = "historico.csv"
+fuso = pytz.timezone("America/Sao_Paulo")
 
 # -------------------------
-# LOOP PRINCIPAL
+# GARANTE ARQUIVO
 # -------------------------
-while True:
+if not os.path.exists(ARQUIVO):
+    pd.DataFrame(
+        columns=["codigo","nome","objeto","data","link","registro"]
+    ).to_csv(ARQUIVO, index=False)
+
+# -------------------------
+# HOME (DASHBOARD)
+# -------------------------
+@app.route("/")
+def home():
     try:
-        print("🔄 Verificando servidor...")
+        df = pd.read_csv(ARQUIVO)
+    except:
+        df = pd.DataFrame(columns=["codigo","nome","objeto","data","link","registro"])
 
-        try:
-            # 🔥 timeout maior (Render pode estar dormindo)
-            r = requests.get(URL, timeout=60)
-            print("✅ Conectado ao servidor")
-        except requests.exceptions.ReadTimeout:
-            print("⏳ Servidor dormindo... tentando novamente em 15s")
-            time.sleep(15)
-            continue
-        except Exception as e:
-            print("❌ Erro de conexão:", e)
-            time.sleep(15)
-            continue
+    # 🔍 FILTROS
+    codigo = request.args.get("codigo", "")
+    objeto = request.args.get("objeto", "")
 
-        # 🔍 Processa JSON com segurança
-        try:
-            dados = json.loads(r.text)
-        except Exception as e:
-            print("❌ Erro ao ler JSON:", e)
-            time.sleep(10)
-            continue
+    if codigo:
+        df = df[df["codigo"].astype(str).str.contains(codigo, case=False, na=False)]
 
-        novos = []
+    if objeto:
+        df = df[df["objeto"].astype(str).str.contains(objeto, case=False, na=False)]
 
-        # 🔍 Detecta novos registros (chave única)
-        for row in dados:
-            codigo = str(row.get("codigo", "")).strip()
-            registro = str(row.get("registro", "")).strip()
+    # 📊 GRÁFICO
+    try:
+        df["registro_dt"] = pd.to_datetime(df["registro"], errors="coerce")
+        grafico = df.groupby(df["registro_dt"].dt.date).size()
 
-            if not codigo:
-                continue
+        labels = list(grafico.index.astype(str))
+        valores = list(grafico.values)
+    except:
+        labels = []
+        valores = []
 
-            chave = f"{codigo}-{registro}"
+    # 🔗 LINK CLICÁVEL
+    if not df.empty:
+        df = df.sort_values(by="registro", ascending=False)
+        df["link"] = df["link"].apply(lambda x: f'<a href="{x}" target="_blank">🔗 Abrir</a>')
+        tabela = df.to_html(classes="table", index=False, escape=False)
+    else:
+        tabela = "<p>Sem dados ainda</p>"
 
-            if chave not in vistos:
-                vistos.add(chave)
-                novos.append(row)
+    return f"""
+    <html>
+    <head>
+        <title>Monitor EMBASA</title>
 
-        # 💾 Salva controle local
-        with open(ARQUIVO_LOCAL, "w", encoding="utf-8") as f:
-            for item in vistos:
-                f.write(item + "\n")
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-        # 🔔 Envia notificações
-        for row in novos:
-            mensagem = f'{row.get("codigo","")} | {row.get("nome","")}'
+        <style>
+            body {{
+                font-family: Arial;
+                background: #f4f6f9;
+                padding: 20px;
+            }}
 
-            try:
-                toast = Notification(
-                    app_id="Monitor EMBASA",
-                    title="🚨 Nova Licitação EMBASA",
-                    msg=mensagem,
-                    duration="short"
-                )
+            .card {{
+                background: white;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }}
 
-                toast.set_audio(audio.Default, loop=False)
-                toast.show()
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+            }}
 
-                print("🔔 Nova detectada:", mensagem)
+            th {{
+                background: #0078D4;
+                color: white;
+                padding: 10px;
+            }}
 
-            except Exception as e:
-                print("❌ Erro ao notificar:", e)
+            td {{
+                padding: 8px;
+                border-bottom: 1px solid #ddd;
+            }}
 
-    except Exception as e:
-        print("❌ Erro geral:", e)
+            input {{
+                padding: 8px;
+                margin: 5px;
+                border-radius: 5px;
+                border: 1px solid #ccc;
+            }}
 
-    # ⏱ Intervalo
-    time.sleep(10)
+            button {{
+                padding: 8px 15px;
+                background: #0078D4;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+            }}
+        </style>
+    </head>
+
+    <body>
+
+    <div class="card">
+        <h2>📊 Monitor EMBASA</h2>
+
+        <form>
+            <input name="codigo" placeholder="Código">
+            <input name="objeto" placeholder="Objeto">
+            <button type="submit">Filtrar</button>
+        </form>
+
+        <br>
+
+        <a href="/teste">
+            <button>🚀 Testar Notificação</button>
+        </a>
+
+        <br><br>
+
+        <!-- 📈 GRÁFICO -->
+        <canvas id="grafico" height="100"></canvas>
+
+        <script>
+        const ctx = document.getElementById('grafico');
+
+        new Chart(ctx, {{
+            type: 'line',
+            data: {{
+                labels: {labels},
+                datasets: [{{
+                    label: 'Licitações por dia',
+                    data: {valores},
+                    borderWidth: 2
+                }}]
+            }}
+        }});
+        </script>
+
+        <br><br>
+
+        {tabela}
+    </div>
+
+    </body>
+    </html>
+    """
+
+# -------------------------
+# API (USADA PELO NOTIFICADOR)
+# -------------------------
+@app.route("/dados")
+def dados():
+    try:
+        df = pd.read_csv(ARQUIVO)
+        return df.to_json(orient="records")
+    except:
+        return "[]"
+
+# -------------------------
+# TESTE (GERA NOVO REGISTRO)
+# -------------------------
+@app.route("/teste")
+def teste():
+    agora = datetime.now(fuso).strftime("%d/%m/%Y %H:%M:%S")
+
+    linha = pd.DataFrame([[
+        f"TESTE{datetime.now().strftime('%H%M%S')}/26",
+        "Licitação Teste",
+        "Objeto teste automático",
+        agora,
+        "https://teste.com",
+        agora
+    ]], columns=["codigo","nome","objeto","data","link","registro"])
+
+    linha.to_csv(ARQUIVO, mode="a", header=False, index=False)
+
+    return "OK"
+
+# -------------------------
+# EXECUÇÃO (IMPORTANTE PARA RENDER)
+# -------------------------
+if __name__ == "__main__":
+    import os
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
