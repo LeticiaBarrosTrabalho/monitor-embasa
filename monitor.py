@@ -1,99 +1,39 @@
 import time
 import requests
-from datetime import datetime
-from bs4 import BeautifulSoup
-import os
-import pytz
+from plyer import notification
+import pandas as pd
 
-# CONFIG
-URL = "https://www.embasa.ba.gov.br/fornecedor/form.jsp?sys=FOR&action=openform&formID=464569229"
-INTERVALO = 300
-ARQUIVO = "historico.csv"
+URL = "https://monitor-embasa.onrender.com/dados"
 
-# FUSO HORÁRIO BRASIL
-fuso = pytz.timezone("America/Sao_Paulo")
+vistos = set()
 
-# -------------------------
-# SALVAR DADOS
-# -------------------------
-def salvar(dados):
-    existe = os.path.exists(ARQUIVO)
+print("🔔 Notificador rodando em segundo plano...")
 
-    with open(ARQUIVO, "a", encoding="utf-8") as f:
-        if not existe:
-            f.write("codigo,nome,objeto,data,link,registro\n")
-
-        f.write(",".join(dados) + "\n")
-
-# -------------------------
-# EXTRAÇÃO
-# -------------------------
-def extrair():
-    dados = []
-
+while True:
     try:
-        r = requests.get(URL, timeout=30)
-        soup = BeautifulSoup(r.text, "html.parser")
+        df = pd.read_json(URL)
 
-        textos = soup.get_text("\n").split("\n")
+        novos = []
 
-        for i in range(len(textos)):
-            linha = textos[i].strip()
+        for _, row in df.iterrows():
+            chave = row["codigo"]
 
-            if "/" in linha and len(linha) < 15:
-                try:
-                    codigo = linha
-                    nome = textos[i+1].strip()
-                    status = textos[i+2].strip()
-                    data = textos[i+3].strip()
+            if chave not in vistos:
+                vistos.add(chave)
+                novos.append(row)
 
-                    objeto = f"{nome} | {status}".replace(",", " ")
-                    link = URL
+        for row in novos:
+            mensagem = f'{row["codigo"]} | {row["nome"]}'
 
-                    dados.append([codigo, nome, objeto, data, link])
-                except:
-                    pass
+            notification.notify(
+                title="🚨 Nova Licitação EMBASA",
+                message=mensagem,
+                timeout=10
+            )
+
+            print("🔔 Nova:", mensagem)
 
     except Exception as e:
-        print("Erro ao acessar site:", e)
+        print("Erro:", e)
 
-    # fallback (nunca fica vazio)
-    if not dados:
-        dados.append([
-            "TESTE123/26",
-            "Licitação Teste",
-            "Objeto de teste automático",
-            datetime.now(fuso).strftime("%d/%m/%Y"),
-            URL
-        ])
-
-    return dados
-
-# -------------------------
-# MONITOR
-# -------------------------
-def monitor():
-    print("🔎 Monitor rodando 24h...")
-
-    vistos = set()
-
-    while True:
-        try:
-            itens = extrair()
-
-            for item in itens:
-                chave = item[0]
-
-                if chave not in vistos:
-                    vistos.add(chave)
-
-                    agora = datetime.now(fuso).strftime("%d/%m/%Y %H:%M")
-
-                    salvar(item + [agora])
-
-                    print("🚨 Novo:", item)
-
-        except Exception as e:
-            print("Erro monitor:", e)
-
-        time.sleep(INTERVALO)
+    time.sleep(15)

@@ -1,6 +1,6 @@
 flask
+pandas
 requests
 beautifulsoup4
-pandas
-plyer
 pytz
+gunicorn
