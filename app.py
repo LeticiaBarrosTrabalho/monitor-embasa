@@ -12,22 +12,29 @@ fuso = pytz.timezone("America/Sao_Paulo")
 # -------------------------
 # GARANTE ARQUIVO
 # -------------------------
-if not os.path.exists(ARQUIVO):
-    pd.DataFrame(
-        columns=["codigo","nome","objeto","data","link","registro"]
-    ).to_csv(ARQUIVO, index=False)
+def garantir_arquivo():
+    if not os.path.exists(ARQUIVO):
+        pd.DataFrame(
+            columns=["codigo","nome","objeto","data","link","registro"]
+        ).to_csv(ARQUIVO, index=False)
 
 # -------------------------
-# HOME (DASHBOARD)
+# LEITURA SEGURA
+# -------------------------
+def ler_csv_seguro():
+    try:
+        return pd.read_csv(ARQUIVO)
+    except:
+        return pd.DataFrame(columns=["codigo","nome","objeto","data","link","registro"])
+
+# -------------------------
+# HOME
 # -------------------------
 @app.route("/")
 def home():
-    try:
-        df = pd.read_csv(ARQUIVO)
-    except:
-        df = pd.DataFrame(columns=["codigo","nome","objeto","data","link","registro"])
+    garantir_arquivo()
+    df = ler_csv_seguro()
 
-    # 🔍 FILTROS
     codigo = request.args.get("codigo", "")
     objeto = request.args.get("objeto", "")
 
@@ -37,160 +44,102 @@ def home():
     if objeto:
         df = df[df["objeto"].astype(str).str.contains(objeto, case=False, na=False)]
 
-    # 📊 GRÁFICO
+    # gráfico
     try:
         df["registro_dt"] = pd.to_datetime(df["registro"], errors="coerce")
         grafico = df.groupby(df["registro_dt"].dt.date).size()
-
         labels = list(grafico.index.astype(str))
         valores = list(grafico.values)
     except:
-        labels = []
-        valores = []
+        labels, valores = [], []
 
-    # 🔗 LINK CLICÁVEL
+    # tabela
     if not df.empty:
         df = df.sort_values(by="registro", ascending=False)
         df["link"] = df["link"].apply(lambda x: f'<a href="{x}" target="_blank">🔗 Abrir</a>')
-        tabela = df.to_html(classes="table", index=False, escape=False)
+        tabela = df.to_html(index=False, escape=False)
     else:
-        tabela = "<p>Sem dados ainda</p>"
+        tabela = "<p>Sem dados</p>"
 
     return f"""
     <html>
     <head>
         <title>Monitor EMBASA</title>
-
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-        <style>
-            body {{
-                font-family: Arial;
-                background: #f4f6f9;
-                padding: 20px;
-            }}
-
-            .card {{
-                background: white;
-                padding: 20px;
-                border-radius: 10px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            }}
-
-            table {{
-                width: 100%;
-                border-collapse: collapse;
-            }}
-
-            th {{
-                background: #0078D4;
-                color: white;
-                padding: 10px;
-            }}
-
-            td {{
-                padding: 8px;
-                border-bottom: 1px solid #ddd;
-            }}
-
-            input {{
-                padding: 8px;
-                margin: 5px;
-                border-radius: 5px;
-                border: 1px solid #ccc;
-            }}
-
-            button {{
-                padding: 8px 15px;
-                background: #0078D4;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-            }}
-        </style>
     </head>
+    <body style="font-family: Arial; padding:20px; background:#f4f6f9;">
 
-    <body>
+    <h2>📊 Monitor EMBASA</h2>
 
-    <div class="card">
-        <h2>📊 Monitor EMBASA</h2>
+    <form>
+        <input name="codigo" placeholder="Código">
+        <input name="objeto" placeholder="Objeto">
+        <button>Filtrar</button>
+    </form>
 
-        <form>
-            <input name="codigo" placeholder="Código">
-            <input name="objeto" placeholder="Objeto">
-            <button type="submit">Filtrar</button>
-        </form>
+    <br>
+    <a href="/teste"><button>🚀 Testar</button></a>
 
-        <br>
+    <br><br>
 
-        <a href="/teste">
-            <button>🚀 Testar Notificação</button>
-        </a>
+    <canvas id="grafico"></canvas>
 
-        <br><br>
+    <script>
+    new Chart(document.getElementById('grafico'), {{
+        type: 'line',
+        data: {{
+            labels: {labels},
+            datasets: [{{
+                label: 'Registros por dia',
+                data: {valores}
+            }}]
+        }}
+    }});
+    </script>
 
-        <!-- 📈 GRÁFICO -->
-        <canvas id="grafico" height="100"></canvas>
-
-        <script>
-        const ctx = document.getElementById('grafico');
-
-        new Chart(ctx, {{
-            type: 'line',
-            data: {{
-                labels: {labels},
-                datasets: [{{
-                    label: 'Licitações por dia',
-                    data: {valores},
-                    borderWidth: 2
-                }}]
-            }}
-        }});
-        </script>
-
-        <br><br>
-
-        {tabela}
-    </div>
+    <br><br>
+    {tabela}
 
     </body>
     </html>
     """
 
 # -------------------------
-# API (USADA PELO NOTIFICADOR)
+# API
 # -------------------------
 @app.route("/dados")
 def dados():
-    try:
-        df = pd.read_csv(ARQUIVO)
-        return df.to_json(orient="records")
-    except:
-        return "[]"
+    garantir_arquivo()
+    df = ler_csv_seguro()
+    return df.to_json(orient="records")
 
 # -------------------------
-# TESTE (GERA NOVO REGISTRO)
+# TESTE
 # -------------------------
 @app.route("/teste")
 def teste():
+    garantir_arquivo()
+
     agora = datetime.now(fuso).strftime("%d/%m/%Y %H:%M:%S")
 
     linha = pd.DataFrame([[
-        f"TESTE{datetime.now().strftime('%H%M%S')}/26",
-        "Licitação Teste",
-        "Objeto teste automático",
+        f"TESTE{datetime.now().strftime('%H%M%S')}",
+        "Teste",
+        "Objeto teste",
         agora,
         "https://teste.com",
         agora
     ]], columns=["codigo","nome","objeto","data","link","registro"])
 
-    linha.to_csv(ARQUIVO, mode="a", header=False, index=False)
+    try:
+        linha.to_csv(ARQUIVO, mode="a", header=False, index=False)
+    except:
+        pass
 
     return "OK"
 
 # -------------------------
-# EXECUÇÃO (IMPORTANTE PARA RENDER)
+# START
 # -------------------------
 if __name__ == "__main__":
     import os
