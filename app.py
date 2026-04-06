@@ -24,28 +24,162 @@ def home():
     if objeto:
         df = df[df["objeto"].str.contains(objeto, case=False, na=False)]
 
-    df = df.sort_values(by="id", ascending=False)
+    # KPIs
+    total = len(df)
 
-    df["link"] = df["link"].apply(lambda x: f'<a href="{x}" target="_blank">🔗 Abrir</a>')
+    try:
+        df["registro_dt"] = pd.to_datetime(df["registro"], errors="coerce")
+        hoje = pd.Timestamp.today().date()
+        novos_hoje = len(df[df["registro_dt"].dt.date == hoje])
 
-    tabela = df.to_html(index=False, escape=False)
+        grafico = df.groupby(df["registro_dt"].dt.date).size()
+        labels = list(grafico.index.astype(str))
+        valores = list(grafico.values)
+    except:
+        novos_hoje = 0
+        labels, valores = [], []
+
+    # tabela
+    if not df.empty:
+        df = df.sort_values(by="id", ascending=False)
+        df["link"] = df["link"].apply(lambda x: f'<a href="{x}" target="_blank">Abrir</a>')
+        tabela = df.to_html(index=False, escape=False, classes="table")
+    else:
+        tabela = "<p>Sem dados</p>"
 
     return f"""
     <html>
-    <body style="font-family: Arial; padding:20px;">
-    <h2>📊 Monitor EMBASA</h2>
+    <head>
+        <title>Dashboard EMBASA</title>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <style>
+            body {{
+                font-family: Arial;
+                background: #f4f6f9;
+                padding: 20px;
+            }}
 
-    <form>
-        <input name="codigo" placeholder="Código">
-        <input name="objeto" placeholder="Objeto">
-        <button>Filtrar</button>
-    </form>
+            .container {{
+                max-width: 1200px;
+                margin: auto;
+            }}
 
-    <br>
-    <a href="/teste"><button>🚀 Teste</button></a>
+            .cards {{
+                display: flex;
+                gap: 20px;
+                margin-bottom: 20px;
+            }}
 
-    <br><br>
-    {tabela}
+            .card {{
+                flex: 1;
+                background: white;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                text-align: center;
+            }}
+
+            .card h2 {{
+                margin: 0;
+                font-size: 30px;
+                color: #0078D4;
+            }}
+
+            .card p {{
+                margin: 5px;
+                color: #666;
+            }}
+
+            .filtros {{
+                background: white;
+                padding: 15px;
+                border-radius: 10px;
+                margin-bottom: 20px;
+            }}
+
+            input {{
+                padding: 8px;
+                margin: 5px;
+                border-radius: 5px;
+                border: 1px solid #ccc;
+            }}
+
+            button {{
+                padding: 8px 15px;
+                background: #0078D4;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+            }}
+
+            .table {{
+                width: 100%;
+                border-collapse: collapse;
+                background: white;
+            }}
+
+            .table th {{
+                background: #0078D4;
+                color: white;
+                padding: 10px;
+            }}
+
+            .table td {{
+                padding: 8px;
+                border-bottom: 1px solid #ddd;
+            }}
+        </style>
+    </head>
+
+    <body>
+    <div class="container">
+
+        <h2>📊 Dashboard EMBASA</h2>
+
+        <div class="cards">
+            <div class="card">
+                <h2>{total}</h2>
+                <p>Total de Registros</p>
+            </div>
+
+            <div class="card">
+                <h2>{novos_hoje}</h2>
+                <p>Novos Hoje</p>
+            </div>
+        </div>
+
+        <div class="filtros">
+            <form>
+                <input name="codigo" placeholder="Código">
+                <input name="objeto" placeholder="Objeto">
+                <button>Filtrar</button>
+                <a href="/teste"><button type="button">🚀 Teste</button></a>
+            </form>
+        </div>
+
+        <canvas id="grafico"></canvas>
+
+        <script>
+        new Chart(document.getElementById('grafico'), {{
+            type: 'line',
+            data: {{
+                labels: {labels},
+                datasets: [{{
+                    label: 'Registros por dia',
+                    data: {valores},
+                    tension: 0.3
+                }}]
+            }}
+        }});
+        </script>
+
+        <br><br>
+
+        {tabela}
+
+    </div>
+
     </body>
     </html>
     """
