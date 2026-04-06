@@ -1,111 +1,101 @@
 from flask import Flask, request, redirect
 import pandas as pd
-import threading
 import os
-import time
 from datetime import datetime
 import pytz
-from monitor import monitor
 
 app = Flask(__name__)
 
-# FUSO BRASIL
+# Fuso horário Brasil
 fuso = pytz.timezone("America/Sao_Paulo")
 
+ARQUIVO = "historico.csv"
+
 # -------------------------
-# DASHBOARD COM FILTROS
+# GARANTE ARQUIVO EXISTENTE
+# -------------------------
+if not os.path.exists(ARQUIVO):
+    with open(ARQUIVO, "w", encoding="utf-8") as f:
+        f.write("codigo,nome,objeto,data,link,registro\n")
+
+# -------------------------
+# HOME (DASHBOARD)
 # -------------------------
 @app.route("/")
-def dashboard():
-    if not os.path.exists("historico.csv"):
-        return "Sem dados ainda"
+def home():
+    filtro_codigo = request.args.get("codigo", "").lower()
+    filtro_objeto = request.args.get("objeto", "").lower()
 
-    df = pd.read_csv("historico.csv")
+    try:
+        df = pd.read_csv(ARQUIVO)
+    except:
+        df = pd.DataFrame(columns=["codigo","nome","objeto","data","link","registro"])
 
-    tipo = request.args.get("tipo", "")
-    busca = request.args.get("busca", "")
+    # 🔍 FILTROS
+    if filtro_codigo:
+        df = df[df["codigo"].astype(str).str.lower().str.contains(filtro_codigo)]
 
-    if tipo:
-        df = df[df["objeto"].str.contains(tipo, case=False, na=False)]
+    if filtro_objeto:
+        df = df[df["objeto"].astype(str).str.lower().str.contains(filtro_objeto)]
 
-    if busca:
-        df = df[df["objeto"].str.contains(busca, case=False, na=False)]
+    # 🔗 LINK CLICÁVEL
+    if not df.empty:
+        df["link"] = df["link"].apply(lambda x: f'<a href="{x}" target="_blank">Abrir</a>')
 
-    html = """
+    html = f"""
     <html>
     <head>
-        <title>Dashboard Licitações</title>
-        <style>
-            body { font-family: Arial; background:#0f172a; color:white; text-align:center; }
-            table { width:90%; margin:auto; border-collapse: collapse; }
-            th, td { padding:10px; border:1px solid #334155; }
-            th { background:#1e293b; }
-            tr:hover { background:#334155; }
-            input, select {
-                padding:10px;
-                margin:5px;
-                border-radius:6px;
-                border:none;
-            }
-            button { 
-                background:#22c55e; 
-                padding:10px; 
-                border:none; 
-                color:white; 
-                border-radius:8px; 
-                cursor:pointer; 
-                margin:5px;
-            }
-        </style>
+        <title>Monitor de Licitações</title>
     </head>
-    <body>
-        <h1>📊 Dashboard de Licitações</h1>
+    <body style="font-family: Arial; padding: 20px;">
+        <h2>📊 Monitor de Licitações</h2>
 
         <form method="get">
-            <select name="tipo">
-                <option value="">Todos</option>
-                <option value="licitação">Licitação</option>
-                <option value="pregão">Pregão</option>
-                <option value="edital">Edital</option>
-            </select>
-
-            <input type="text" name="busca" placeholder="Buscar no objeto...">
-
+            <input type="text" name="codigo" placeholder="Filtrar por código">
+            <input type="text" name="objeto" placeholder="Filtrar por objeto">
             <button type="submit">Filtrar</button>
         </form>
 
-        <form action="/teste">
+        <br>
+
+        <a href="/teste">
             <button>🚀 Testar Notificação</button>
-        </form>
+        </a>
+
+        <br><br>
     """
 
-    df["link"] = df["link"].apply(lambda x: f'<a href="{x}" target="_blank">Abrir</a>')
-
-html += df.tail(50).to_html(index=False, escape=False)
+    if df.empty:
+        html += "<p>Sem dados ainda</p>"
+    else:
+        html += df.tail(50).to_html(index=False, escape=False)
 
     html += "</body></html>"
 
     return html
 
 # -------------------------
-# BOTÃO TESTE
+# BOTÃO TESTE (FINAL CORRIGIDO)
 # -------------------------
 @app.route("/teste")
 def teste():
-    agora = datetime.now(fuso).strftime("%d/%m/%Y %H:%M")
+    agora = datetime.now(fuso).strftime("%d/%m/%Y %H:%M:%S")
+
+    # 🔥 GARANTE QUE CADA TESTE É ÚNICO
+    unique_id = datetime.now().strftime("%H%M%S%f")
 
     linha = [
-        "TESTE999/26",
+        f"TESTE{unique_id}/26",
         "Licitação Teste",
-        "Objeto de teste com filtro edital",
+        f"Objeto de teste {unique_id}",
         agora,
         "https://teste.com",
         agora
     ]
 
-    existe = os.path.exists("historico.csv")
+    existe = os.path.exists(ARQUIVO)
 
-    with open("historico.csv", "a", encoding="utf-8") as f:
+    with open(ARQUIVO, "a", encoding="utf-8") as f:
         if not existe:
             f.write("codigo,nome,objeto,data,link,registro\n")
 
@@ -114,25 +104,7 @@ def teste():
     return redirect("/")
 
 # -------------------------
-# HEALTH CHECK
-# -------------------------
-@app.route("/health")
-def health():
-    return "ok", 200
-
-# -------------------------
-# MONITOR EM BACKGROUND
-# -------------------------
-def iniciar_monitor():
-    time.sleep(10)
-    monitor()
-
-thread = threading.Thread(target=iniciar_monitor, daemon=True)
-thread.start()
-
-# -------------------------
-# START
+# EXECUÇÃO
 # -------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=10000)
