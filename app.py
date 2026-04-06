@@ -2,7 +2,6 @@ import time
 import requests
 import os
 import json
-from winotify import Notification, audio
 
 # 🔗 URL da API
 URL = "https://monitor-embasa.onrender.com/dados"
