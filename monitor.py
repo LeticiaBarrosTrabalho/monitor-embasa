@@ -2,36 +2,43 @@ import time
 import requests
 from plyer import notification
 
-URL = "http://127.0.0.1:5000/teste-notificacao"
+BASE_URL = "http://127.0.0.1:5000"
 
-def notificar(titulo, mensagem):
+def windows_notify(titulo, msg):
     notification.notify(
         title=titulo,
-        message=mensagem,
+        message=msg,
         timeout=5
     )
 
-def monitorar():
-    print("🔎 Monitor rodando...")
+def enviar_evento(msg):
+    try:
+        requests.get(f"{BASE_URL}/evento/{msg}")
+    except:
+        pass
 
-    ultimo_estado = None
+def monitorar():
+    print("🟢 Monitor industrial iniciado")
+
+    estado_anterior = None
 
     while True:
         try:
-            resposta = requests.get("https://httpbin.org/get")
-            estado_atual = resposta.status_code
+            # simulação de checagem (substitua sua regra real aqui)
+            r = requests.get("https://httpbin.org/get")
+            estado_atual = r.status_code
 
-            if estado_atual != ultimo_estado:
-                print("📢 Mudança detectada!")
+            if estado_atual != estado_anterior:
+                print("📡 Mudança detectada")
 
-                requests.get(URL)
+                enviar_evento("ALTERAÇÃO DETECTADA NO SISTEMA")
 
-                notificar(
-                    "Monitor EMBASA",
-                    "🔔 Alteração detectada no sistema"
+                windows_notify(
+                    "Sistema Industrial",
+                    "Alteração detectada com sucesso"
                 )
 
-                ultimo_estado = estado_atual
+                estado_anterior = estado_atual
 
         except Exception as e:
             print("Erro:", e)

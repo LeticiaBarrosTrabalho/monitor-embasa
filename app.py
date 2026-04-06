@@ -1,38 +1,34 @@
-from flask import Flask, render_template
-from flask_socketio import SocketIO
+from flask import Flask, render_template, jsonify
 from datetime import datetime
 import pytz
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 fuso = pytz.timezone("America/Sao_Paulo")
 
 registros = []
 
-def novo_registro(texto):
-    registro = {
+def add_log(texto):
+    registros.insert(0, {
         "texto": texto,
         "hora": datetime.now(fuso).strftime("%d/%m/%Y %H:%M:%S")
-    }
-
-    registros.insert(0, registro)
-
-    socketio.emit("nova_notificacao", registro)
-    return registro
-
+    })
 
 @app.route("/")
 def index():
     return render_template("index.html", registros=registros)
 
+# botão de teste
+@app.route("/teste")
+def teste():
+    add_log("🔔 TESTE MANUAL DE NOTIFICAÇÃO")
+    return jsonify({"status": "ok"})
 
-# 🔥 BOTÃO DE TESTE (Windows + Browser)
-@app.route("/teste-notificacao")
-def teste_notificacao():
-    novo_registro("🔔 TESTE DE NOTIFICAÇÃO WINDOWS / SISTEMA")
-    return "OK"
-
+# endpoint usado pelo monitor
+@app.route("/evento/<msg>")
+def evento(msg):
+    add_log(f"📡 {msg}")
+    return jsonify({"status": "ok"})
 
 if __name__ == "__main__":
-    socketio.run(app, host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=False)

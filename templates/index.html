@@ -1,8 +1,7 @@
-<<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
-    <title>Monitor de Alterações</title>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <title>Dashboard Industrial</title>
 
     <style>
         body {
@@ -21,13 +20,9 @@
             border: none;
             padding: 10px 15px;
             color: white;
-            cursor: pointer;
             border-radius: 6px;
+            cursor: pointer;
             margin-bottom: 20px;
-        }
-
-        button:hover {
-            background: #16a34a;
         }
 
         .log {
@@ -46,45 +41,27 @@
 
 <body>
 
-<h1>📡 Monitor de Alterações</h1>
+<h1>📡 Sistema Industrial de Monitoramento</h1>
 
-<!-- 🔥 BOTÃO TESTE -->
-<button onclick="testarNotificacao()">🔔 Testar Notificação Windows</button>
+<button onclick="teste()">🔔 Teste de Notificação</button>
 
 <div id="logs">
     {% for r in registros %}
-        <div class="log">
-            {{ r.texto }} <br>
-            <span class="hora">{{ r.hora }}</span>
-        </div>
+    <div class="log">
+        {{ r.texto }} <br>
+        <span class="hora">{{ r.hora }}</span>
+    </div>
     {% endfor %}
 </div>
 
 <script>
-const socket = io();
-
-// evento em tempo real
-socket.on("nova_notificacao", function(data) {
-    const div = document.createElement("div");
-    div.className = "log";
-    div.innerHTML = `
-        ${data.texto} <br>
-        <span class="hora">${data.hora}</span>
-    `;
-
-    document.getElementById("logs").prepend(div);
-
-    // alerta no navegador
-    alert("🔔 Nova notificação recebida!");
-});
-
-// botão chama backend
-function testarNotificacao() {
-    fetch("/teste-notificacao")
-        .then(res => res.text())
-        .then(data => {
-            console.log("Teste enviado:", data);
-        });
+function teste() {
+    fetch("/teste")
+    .then(res => res.json())
+    .then(data => {
+        alert("✔ Teste executado com sucesso");
+        location.reload();
+    });
 }
 </script>
 
