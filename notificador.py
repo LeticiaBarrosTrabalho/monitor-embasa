@@ -4,14 +4,14 @@ import os
 import json
 from winotify import Notification, audio
 
-# 🔗 URL da API do seu sistema no Render
+# 🔗 API do seu site
 URL = "https://monitor-embasa.onrender.com/dados"
 
-# 📁 Arquivo local para controle de notificações já vistas
+# 📁 Arquivo de controle (evita repetir notificações)
 ARQUIVO_LOCAL = "vistos.txt"
 
 # -------------------------
-# CARREGA HISTÓRICO LOCAL
+# CARREGA HISTÓRICO
 # -------------------------
 if os.path.exists(ARQUIVO_LOCAL):
     with open(ARQUIVO_LOCAL, "r", encoding="utf-8") as f:
@@ -26,50 +26,81 @@ print("🔔 Notificador rodando em segundo plano...")
 # -------------------------
 while True:
     try:
-        # 🔄 Requisição para API
-        r = requests.get(URL, timeout=10)
+        print("🔄 Verificando servidor...")
 
-        if r.status_code != 200:
-            print("Erro API:", r.status_code)
+        try:
+            # 🔥 timeout alto (Render pode estar dormindo)
+            r = requests.get(URL, timeout=60)
+            print("✅ Conectado!")
+        except requests.exceptions.ReadTimeout:
+            print("⏳ Servidor dormindo... tentando novamente...")
+            time.sleep(15)
+            continue
+        except Exception as e:
+            print("❌ Erro conexão:", e)
+            time.sleep(15)
+            continue
+
+        # 🔍 Converte JSON
+        try:
+            dados = json.loads(r.text)
+        except Exception as e:
+            print("❌ Erro ao ler JSON:", e)
             time.sleep(10)
             continue
 
-        # ✅ Corrige problema do pandas
-        dados = json.loads(r.text)
+        print(f"📡 Registros recebidos: {len(dados)}")
 
         novos = []
 
-        # 🔍 Detecta novos registros
+        # -------------------------
+        # DETECTA NOVOS
+        # -------------------------
         for row in dados:
             codigo = str(row.get("codigo", "")).strip()
+            registro = str(row.get("registro", "")).strip()
 
-            if codigo and codigo not in vistos:
-                vistos.add(codigo)
+            if not codigo:
+                continue
+
+            # 🔥 chave única (ESSENCIAL)
+            chave = f"{codigo}-{registro}"
+
+            if chave not in vistos:
+                vistos.add(chave)
                 novos.append(row)
 
-        # 💾 Salva controle local
+        # -------------------------
+        # SALVA CONTROLE LOCAL
+        # -------------------------
         with open(ARQUIVO_LOCAL, "w", encoding="utf-8") as f:
             for item in vistos:
                 f.write(item + "\n")
 
-        # 🔔 Dispara notificações
+        # -------------------------
+        # ENVIA NOTIFICAÇÃO
+        # -------------------------
         for row in novos:
             mensagem = f'{row.get("codigo","")} | {row.get("nome","")}'
 
-            toast = Notification(
-                app_id="Monitor EMBASA",
-                title="🚨 Nova Licitação EMBASA",
-                msg=mensagem,
-                duration="short"
-            )
+            try:
+                toast = Notification(
+                    app_id="Monitor EMBASA",
+                    title="🚨 Nova Licitação",
+                    msg=mensagem,
+                    duration="short"
+                )
 
-            toast.set_audio(audio.Default, loop=False)
-            toast.show()
+                toast.set_audio(audio.Default, loop=False)
+                toast.show()
 
-            print("🔔 Nova detectada:", mensagem)
+                print("🔔 Nova detectada:", mensagem)
+
+            except Exception as e:
+                print("❌ Erro ao notificar:", e)
 
     except Exception as e:
-        print("Erro no notificador:", e)
+        print("❌ Erro geral:", e)
 
-    # ⏱ Intervalo de verificação
+    # ⏱ intervalo (10 segundos)
     time.sleep(10)
