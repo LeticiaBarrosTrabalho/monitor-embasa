@@ -5,6 +5,7 @@ from plyer import notification
 
 URL_SITE = "https://www.embasa.ba.gov.br/fornecedor/form.jsp?sys=FOR&action=openform&formID=464569229"
 URL_API = "https://monitor-embasa.onrender.com/novo"
+URL_DADOS = "https://monitor-embasa.onrender.com/dados"
 
 vistos = set()
 
@@ -15,12 +16,21 @@ def notificar(msg):
         timeout=5
     )
 
+# 🔁 recuperar alterações antigas (PC desligado)
+def recuperar_antigos():
+    try:
+        dados = requests.get(URL_DADOS).json()
+
+        for item in dados[:5]:
+            notificar(f"Atualização anterior: {item['codigo']}")
+    except:
+        pass
+
 def extrair():
     r = requests.get(URL_SITE, timeout=30)
     soup = BeautifulSoup(r.text, "html.parser")
 
     textos = soup.get_text("\n").split("\n")
-
     dados = []
 
     for i in range(len(textos)):
@@ -50,6 +60,8 @@ def extrair():
 def monitor():
     print("🟢 Monitor rodando...")
 
+    recuperar_antigos()
+
     while True:
         try:
             itens = extrair()
@@ -70,9 +82,3 @@ def monitor():
         time.sleep(60)
 
 monitor()
-
-# após iniciar
-r = requests.get("https://monitor-embasa.onrender.com/dados").json()
-
-for item in r[:5]:
-    notificar(f"Atualização anterior: {item['codigo']}")

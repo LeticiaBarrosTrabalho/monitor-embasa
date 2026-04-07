@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify
 import pandas as pd
 import os
 from datetime import datetime
@@ -20,13 +20,12 @@ if not os.path.exists(ARQUIVO):
 def home():
     df = pd.read_csv(ARQUIVO)
 
-    # ordena
-    df = df.sort_values(by="registro", ascending=False)
-
-    # link clicável
-    df["link"] = df["link"].apply(lambda x: f'<a href="{x}" target="_blank">🔗 Abrir</a>')
-
-    tabela = df.to_html(index=False, escape=False)
+    if not df.empty:
+        df = df.sort_values(by="registro", ascending=False)
+        df["link"] = df["link"].apply(lambda x: f'<a href="{x}" target="_blank">🔗 Abrir</a>')
+        tabela = df.to_html(index=False, escape=False)
+    else:
+        tabela = "<p>Sem registros ainda</p>"
 
     return f"""
     <html>
@@ -45,10 +44,6 @@ def home():
                 padding: 20px;
                 border-radius: 10px;
                 box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            }}
-
-            h2 {{
-                margin-bottom: 10px;
             }}
 
             button {{
@@ -80,7 +75,7 @@ def home():
         <script>
         function testar() {{
             fetch('/teste')
-            .then(() => alert('Teste registrado! Verifique a notificação no Windows'))
+            .then(() => alert('✔ Teste registrado! Verifique o Windows'))
         }}
         </script>
 
@@ -89,7 +84,7 @@ def home():
     <body>
 
     <div class="card">
-        <h2>📊 Monitor EMBASA (Estilo Power BI)</h2>
+        <h2>📊 Monitor EMBASA</h2>
 
         <button onclick="testar()">🔔 Testar Notificação</button>
 
@@ -103,7 +98,7 @@ def home():
     """
 
 # -------------------------
-# API PARA MONITOR
+# API DADOS
 # -------------------------
 @app.route("/dados")
 def dados():
@@ -111,7 +106,7 @@ def dados():
     return df.to_json(orient="records")
 
 # -------------------------
-# REGISTRAR ALTERAÇÃO
+# NOVO REGISTRO
 # -------------------------
 @app.route("/novo", methods=["POST"])
 def novo():
@@ -134,19 +129,16 @@ def novo():
     return "OK"
 
 # -------------------------
-# BOTÃO TESTE
+# TESTE
 # -------------------------
 @app.route("/teste")
 def teste():
     agora = datetime.now(fuso).strftime("%d/%m/%Y %H:%M:%S")
 
     with open(ARQUIVO, "a", encoding="utf-8") as f:
-        f.write(f"TESTE,Teste,Teste manual,{agora},https://teste.com,{agora}\n")
+        f.write(f"TESTE,Teste manual,Teste,{agora},https://teste.com,{agora}\n")
 
     return "OK"
 
-# -------------------------
-# RUN
-# -------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
