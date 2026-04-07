@@ -10,19 +10,20 @@ URL_DADOS = "https://monitor-embasa.onrender.com/dados"
 vistos = set()
 
 def notificar(msg):
-    notification.notify(
-        title="🚨 EMBASA",
-        message=msg,
-        timeout=5
-    )
+    try:
+        notification.notify(
+            title="🚨 EMBASA",
+            message=msg,
+            timeout=10
+        )
+    except:
+        pass
 
-# 🔁 recuperar alterações antigas (PC desligado)
 def recuperar_antigos():
     try:
-        dados = requests.get(URL_DADOS).json()
-
+        dados = requests.get(URL_DADOS, timeout=20).json()
         for item in dados[:5]:
-            notificar(f"Atualização anterior: {item['codigo']}")
+            notificar(f"Anterior: {item['codigo']}")
     except:
         pass
 
@@ -36,19 +37,17 @@ def extrair():
     for i in range(len(textos)):
         linha = textos[i].strip()
 
-        if "/" in linha and len(linha) < 15:
+        if "/" in linha and len(linha) < 20:
             try:
                 codigo = linha
                 nome = textos[i+1].strip()
                 status = textos[i+2].strip()
                 data = textos[i+3].strip()
 
-                objeto = f"{nome} | {status}"
-
                 dados.append({
                     "codigo": codigo,
                     "nome": nome,
-                    "objeto": objeto,
+                    "objeto": f"{nome} | {status}",
                     "data": data,
                     "link": URL_SITE
                 })
@@ -67,12 +66,10 @@ def monitor():
             itens = extrair()
 
             for item in itens:
-                chave = item["codigo"]
+                if item["codigo"] not in vistos:
+                    vistos.add(item["codigo"])
 
-                if chave not in vistos:
-                    vistos.add(chave)
-
-                    requests.post(URL_API, json=item)
+                    requests.post(URL_API, json=item, timeout=20)
 
                     notificar(f"{item['codigo']} - {item['nome']}")
 

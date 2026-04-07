@@ -1,31 +1,65 @@
 from flask import Flask, request, jsonify
-import pandas as pd
-import os
+import sqlite3
 from datetime import datetime
 import pytz
 
 app = Flask(__name__)
-
-ARQUIVO = "historico.csv"
+DB = "historico.db"
 fuso = pytz.timezone("America/Sao_Paulo")
 
-# cria arquivo se não existir
-if not os.path.exists(ARQUIVO):
-    pd.DataFrame(columns=["codigo","nome","objeto","data","link","registro"]).to_csv(ARQUIVO, index=False)
+# -------------------------
+# BANCO DE DADOS
+# -------------------------
+def conectar():
+    return sqlite3.connect(DB)
+
+def criar_banco():
+    conn = conectar()
+    c = conn.cursor()
+
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS registros (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        codigo TEXT,
+        nome TEXT,
+        objeto TEXT,
+        data TEXT,
+        link TEXT,
+        registro TEXT
+    )
+    """)
+
+    conn.commit()
+    conn.close()
+
+criar_banco()
 
 # -------------------------
 # DASHBOARD
 # -------------------------
 @app.route("/")
 def home():
-    df = pd.read_csv(ARQUIVO)
+    conn = conectar()
+    c = conn.cursor()
 
-    if not df.empty:
-        df = df.sort_values(by="registro", ascending=False)
-        df["link"] = df["link"].apply(lambda x: f'<a href="{x}" target="_blank">🔗 Abrir</a>')
-        tabela = df.to_html(index=False, escape=False)
-    else:
-        tabela = "<p>Sem registros ainda</p>"
+    c.execute("SELECT * FROM registros ORDER BY id DESC")
+    dados = c.fetchall()
+
+    conn.close()
+
+    linhas = ""
+
+    for d in dados:
+        linhas += f"""
+        <tr>
+            <td>{d[1]}</td>
+            <td>{d[2]}</td>
+            <td>{d[3]}</td>
+            <td>{d[4]}</td>
+            <td><a href="{d[5]}" target="_blank">🔗 Abrir</a></td>
+            <td>{d[6]}</td>
+        </tr>
+        """
 
     return f"""
     <html>
@@ -75,7 +109,7 @@ def home():
         <script>
         function testar() {{
             fetch('/teste')
-            .then(() => alert('✔ Teste registrado! Verifique o Windows'))
+            .then(() => alert('✔ Teste enviado! Verifique o Windows'))
         }}
         </script>
 
@@ -90,7 +124,19 @@ def home():
 
         <br><br>
 
-        {tabela}
+        <table>
+            <tr>
+                <th>Código</th>
+                <th>Nome</th>
+                <th>Objeto</th>
+                <th>Data</th>
+                <th>Link</th>
+                <th>Registrado em</th>
+            </tr>
+
+            {linhas}
+        </table>
+
     </div>
 
     </body>
@@ -102,8 +148,26 @@ def home():
 # -------------------------
 @app.route("/dados")
 def dados():
-    df = pd.read_csv(ARQUIVO)
-    return df.to_json(orient="records")
+    conn = conectar()
+    c = conn.cursor()
+
+    c.execute("SELECT * FROM registros ORDER BY id DESC")
+    dados = c.fetchall()
+
+    conn.close()
+
+    lista = []
+    for d in dados:
+        lista.append({
+            "codigo": d[1],
+            "nome": d[2],
+            "objeto": d[3],
+            "data": d[4],
+            "link": d[5],
+            "registro": d[6]
+        })
+
+    return jsonify(lista)
 
 # -------------------------
 # NOVO REGISTRO
@@ -114,17 +178,23 @@ def novo():
 
     agora = datetime.now(fuso).strftime("%d/%m/%Y %H:%M:%S")
 
-    linha = [
+    conn = conectar()
+    c = conn.cursor()
+
+    c.execute("""
+    INSERT INTO registros (codigo, nome, objeto, data, link, registro)
+    VALUES (?, ?, ?, ?, ?, ?)
+    """, (
         dados["codigo"],
         dados["nome"],
         dados["objeto"],
         dados["data"],
         dados["link"],
         agora
-    ]
+    ))
 
-    with open(ARQUIVO, "a", encoding="utf-8") as f:
-        f.write(",".join(linha) + "\n")
+    conn.commit()
+    conn.close()
 
     return "OK"
 
@@ -135,8 +205,23 @@ def novo():
 def teste():
     agora = datetime.now(fuso).strftime("%d/%m/%Y %H:%M:%S")
 
-    with open(ARQUIVO, "a", encoding="utf-8") as f:
-        f.write(f"TESTE,Teste manual,Teste,{agora},https://teste.com,{agora}\n")
+    conn = conectar()
+    c = conn.cursor()
+
+    c.execute("""
+    INSERT INTO registros (codigo, nome, objeto, data, link, registro)
+    VALUES (?, ?, ?, ?, ?, ?)
+    """, (
+        "TESTE",
+        "Teste manual",
+        "Teste de notificação",
+        agora,
+        "https://teste.com",
+        agora
+    ))
+
+    conn.commit()
+    conn.close()
 
     return "OK"
 
