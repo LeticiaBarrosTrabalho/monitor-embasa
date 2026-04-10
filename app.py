@@ -212,7 +212,7 @@ def teste():
     INSERT INTO registros (codigo, nome, objeto, data, link, registro)
     VALUES (?, ?, ?, ?, ?, ?)
     """, (
-        "TESTE",
+        f"TESTE {hash(agora)}",
         "Teste manual",
         "Teste de notificação",
         agora,
